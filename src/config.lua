@@ -4,23 +4,23 @@
 --- DateTime: 2023/7/27 下午8:59
 ---
 
-local _M = {};
+local _M = {}
 
 --- Redis相关配置
 
---- Redis服务地址（带端口号）
-_M.REDIS_URL = "";
+--- Redis服务地址（不带端口号）
+_M.REDIS_URL = "localhost"
+
+_M.REDIS_PORT = 6847
 
 --- Redis用户名（如果有）
-_M.REDIS_USERNAME = "";
+-- _M.REDIS_USERNAME = ""
 
 --- Redis密码（如果有）
-_M.REDIS_PASSWORD = "";
+-- _M.REDIS_PASSWORD = ""
 
 --- 鉴权函数，用于判断是否放行请求，仅在路由规则中设置auth为true
-_M.AUTH_METHOD = function()
-    return true;
-end
+-- _M.AUTH_METHOD = function() return true end
 
 --- 路由规则配置
 --- 路由规则由一系列的规则组成，在运行时，这些规则从上至下依次匹配，直至某个规则匹配成功或没有匹配的规则。
@@ -33,18 +33,26 @@ _M.URL_PATTERNS = {
         pattern = "/",
         cache = {
             --- 是否启用该功能
-            enable = true;
+            enable = true,
 
-            --- 缓存有效时间，可以带单位，d为天，h为小时，m为分钟，s为秒，不带单位默认为秒
-            expire = "10d";
+            --- 缓存时间，单位为秒
+            expire = 20 * 60,
+
+            --- 无效响应缓存时间，单位为秒
+            neg_expire = 5,
+            
+            --- 验证是否进行缓存（API返回是否正常）函数
+            validate = function(response_content)
+                return true
+            end
         },
         auth = {
             --- 是否启用该功能
-            enable = false;
+            enable = false,
 
-            ---
+            --- 本路由独立鉴权函数
             method = function()
-
+                return false
             end
         },
     },
@@ -53,6 +61,30 @@ _M.URL_PATTERNS = {
         cache = false,
         auth = false,
     },
-};
+}
 
-return _M;
+--- JWT签名使用密钥，默认值为abcdabcdabcdabcdabcdabcdabcd
+-- _M.JWT_SIGN = "abcdabcdabcdabcdabcdabcdabcd"
+
+--- L1缓存空间名称（无需求默认即可）
+-- _M.CACHE_KEY = "lucacher_cache"
+
+--- L2缓存字典名称（无需求默认即可）
+-- _M.CACHE_DICT = "lucacher_cache_dict"
+
+--- 缓存锁字典名称（无需求默认即可）
+-- _M.CACHE_LOCK_DICT = "lucacher_cache_lock_dict"
+
+--- 缓存前缀（无需求默认即可）
+-- _M.CACHE_HEAD = "lucacher"
+
+--- 默认缓存时间（单位为秒）
+-- _M.CACHE_EXPIRE = 2 * 60
+
+--- 无效响应缓存时间（单位为秒）
+-- _M.CACHE_NEG_EXPIRE = 5
+
+--- 默认缓存验证函数（单位为秒）
+-- _M.CACHE_VALIDATE_METHOD = function(response_content) return true end
+
+return _M

@@ -1,2 +1,6 @@
-lucache.iml
+lucacher.iml
 .idea
+/luarocks
+/lua
+/lua_modules
+/.luarocks
