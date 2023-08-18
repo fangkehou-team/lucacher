@@ -4,7 +4,6 @@
 --- DateTime: 2023/7/31 上午9:05
 ---
 
--- auth
 local config = require("utils.config")
 local route = require("utils.route")
 local request = require("utils.request")
@@ -18,27 +17,42 @@ if not current_route then
     }
 end
 
-local auth_function = config.get("AUTH_METHOD", function() return true end)
+ngx.header["X-APPLICATION"] = "LUCACHER/1.0"
+
+-- auth
+
+local need_auth = false
 
 if type(current_route.auth) == "table" then
-    auth_function = (current_route.auth.method or auth_function)
+    need_auth = current_route.auth.enable
+elseif type(current_route.auth) == "boolean" then
+    need_auth = current_route.auth
 end
 
-local auth_result = auth_function()
+if need_auth then
+    local auth_function = config.get("AUTH_METHOD", function() return true end)
 
-if not auth_result then
-    local json = require("cjson.safe")
+    if type(current_route.auth) == "table" then
+        auth_function = (current_route.auth.method or auth_function)
+    end
 
-    ngx.status = ngx.HTTP_FORBIDDEN
+    local auth_result = auth_function()
 
-    ngx.header["X-CACHE-STATUS"] = "BYPASS"
-    ngx.say(json.encode({
-        code = ngx.HTTP_FORBIDDEN,
-        msg = "Token Not Found Or Invalid",
-        data = {}
-    }))
+    if not auth_result then
+        local json = require("cjson.safe")
 
-    ngx.exit(ngx.HTTP_FORBIDDEN)
+        ngx.status = ngx.HTTP_FORBIDDEN
+
+        ngx.header["X-CACHE-STATUS"] = "BYPASS"
+        ngx.header["Content-Type"] = "application/json"
+        ngx.say(json.encode({
+            code = ngx.HTTP_FORBIDDEN,
+            msg = "Token Not Found Or Invalid",
+            data = {}
+        }))
+
+        ngx.exit(ngx.HTTP_FORBIDDEN)
+    end
 end
 
 -- only cache if http method is get
@@ -50,7 +64,7 @@ end
 -- cache
 local cache = require("utils.cache")
 
-local cache_key = request.get_key
+local cache_key = request.get_key()
 local cache_expire = config.get("CACHE_EXPIRE", 2 * 60)
 
 if type(current_route.cache) == "table" then
@@ -89,3 +103,5 @@ end
 
 ngx.ctx.route = current_route
 ngx.ctx.cache_key = cache_key
+
+ngx.header["X-CACHE-STATUS"] = "DYNAMIC"

@@ -7,28 +7,35 @@
 local config = require("utils.config")
 
 local redis = require("utils.redis"):new({
-    db_url = config.get("REDIS_URL", "localhost"),
+    db_url = config.get("REDIS_URL", "127.0.0.1"),
     db_port = config.get("REDIS_PORT", 6379)
 })
 
-local cache_loader = require("redis.mlcache")
-local cache = cache_loader.new(config.get("CACHE_KEY", "lucacher_cache"), config.get("CACHE_DICT", "lucacher_cache_dict"), {
+local cache_loader = require("resty.mlcache")
+local cache, msg = cache_loader.new(config.get("CACHE_KEY", "lucacher_cache"), config.get("CACHE_DICT", "lucacher_cache_dict"), {
     lru_size = 500,    -- size of the L1 (Lua VM) cache
     ttl      = 3600,   -- 1h ttl for hits
     neg_ttl  = 0.5,     -- 0.5s ttl for misses
 })
 
+if msg then
+    return null, "cache init error"
+end
+
 local _M = {}
 
 function _M.get(key, expire)
-    local value = cache.get(key, {
+    local value = cache:get(key, {
         ttl = expire,
         neg_ttl = 0.1,
     }, function(cache_key)
-        local result, err = redis.get(cache_key)
+
+        local result, err = redis:get(cache_key)
+
         if result and not err then
             return result
         else
+            ngx.log(ngx.ERR, err)
             return nil, error("no cache, fallback.")
         end
     end, key)
@@ -37,8 +44,8 @@ function _M.get(key, expire)
 end
 
 function _M.put(key, value, expire)
-    redis.set(key, value)
-    redis.expire(key, expire)
+    redis:set(key, value)
+    redis:expire(key, expire)
 end
 
 return _M

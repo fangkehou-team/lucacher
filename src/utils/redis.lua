@@ -237,7 +237,7 @@ function _M.new(self, opts)
     opts = opts or {}
     local timeout = (opts.timeout and opts.timeout * 1000) or 1000
     local db_index= opts.db_index or 0
-    local db_url = opts.db_connect_url or "localhost"
+    local db_url = opts.db_connect_url or "127.0.0.1"
     local db_port = opts.db_port or 6379
 
     return setmetatable({

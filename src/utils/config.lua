@@ -9,7 +9,11 @@ local configs = require("config")
 local _M = {}
 
 function _M.get(key, default_value)
-    return configs[key] or default_value
+    if not configs[key] then
+        return default_value
+    else
+        return configs[key]
+    end
 end
 
 return _M

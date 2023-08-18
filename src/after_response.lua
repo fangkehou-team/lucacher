@@ -8,75 +8,86 @@ local cache = require("utils.cache")
 local config = require("utils.config")
 
 local current_route = ngx.ctx.route
-local cache_time = config.get("CACHE_EXPIRE", 2 * 60)
-local cache_validate_method = config.get("CACHE_VALIDATE_METHOD", function(response_content) return true  end)
 
-if type(current_route) == "table" then
-    if current_route.enable == false then
-        return
-    end
+local need_cache = false
 
-    if current_route.expire then
-        cache_time = current_route.expire
-    end
-
-    if current_route.validate then
-        cache_validate_method = current_route.validate
-    end
-else
-    if not current_route then
-        return
-    end
+if type(current_route.cache) == "table" then
+    need_cache = current_route.cache.enable
+elseif type(current_route.cache) == "boolean" then
+    need_cache = current_route.cache
 end
 
-local current_content = ngx.arg[1]
-
-if not ngx.arg[2] then
-    local content_buffer = (ngx.ctx.content_buffer or {})
-    content_buffer[#content_buffer + 1] = current_content
-    ngx.ctx.content_buffer = content_buffer
-
-    return
-else
-    if current_content then
-        local content_buffer = (ngx.ctx.content_buffer or {})
-        content_buffer[#content_buffer + 1] = current_content
-    end
-
-    current_content = table.concat(ngx.ctx.content_buffer, "")
-end
-
-local real_content_table = {
-    code = ngx.status,
-    header = ngx.resp.get_headers(),
-    content = current_content
-}
-
-local json = require("cjson.safe")
-
-local real_content = json.encode(real_content_table)
-
-local cache_validate_result = cache_validate_method(real_content_table)
-
-if not cache_validate_result then
-    cache_time = config.get("CACHE_NEG_EXPIRE", 5)
+if need_cache then
+    local cache_time = config.get("CACHE_EXPIRE", 2 * 60)
+    local cache_validate_method = config.get("CACHE_VALIDATE_METHOD", function(response_content) return true end)
 
     if type(current_route) == "table" then
         if current_route.enable == false then
             return
         end
 
-        if current_route.neg_expire then
-            cache_time = current_route.neg_expire
+        if current_route.expire then
+            cache_time = current_route.expire
+        end
+
+        if current_route.validate then
+            cache_validate_method = current_route.validate
+        end
+    else
+        if not current_route then
+            return
         end
     end
+
+    local current_content = ngx.arg[1]
+
+    if not ngx.arg[2] then
+        local content_buffer = (ngx.ctx.content_buffer or {})
+        content_buffer[#content_buffer + 1] = current_content
+        ngx.ctx.content_buffer = content_buffer
+
+        return
+    else
+        if current_content then
+            local content_buffer = (ngx.ctx.content_buffer or {})
+            content_buffer[#content_buffer + 1] = current_content
+        end
+
+        current_content = table.concat(ngx.ctx.content_buffer, "")
+    end
+
+    local real_content_table = {
+        code = ngx.status,
+        header = ngx.resp.get_headers(),
+        content = current_content
+    }
+
+    local json = require("cjson.safe")
+
+    local real_content = json.encode(real_content_table)
+
+    local cache_validate_result = cache_validate_method(real_content_table)
+
+    if not cache_validate_result then
+        cache_time = config.get("CACHE_NEG_EXPIRE", 5)
+
+        if type(current_route) == "table" then
+            if current_route.enable == false then
+                return
+            end
+
+            if current_route.neg_expire then
+                cache_time = current_route.neg_expire
+            end
+        end
+    end
+
+    local cache_key = ngx.ctx.cache_key
+    local cache_lock = ngx.ctx.cache_lock
+
+    ngx.timer.at(0, function()
+        cache.put(cache_key, real_content, cache_time)
+    end)
+
+    cache_lock:unlock()
 end
-
-ngx.header["X-CACHE-STATUS"] = "DYNAMIC"
-
-local cache_key = ngx.ctx.cache_key
-local cache_lock = ngx.ctx.cache_lock
-
-cache.put(cache_key, real_content, cache_time)
-
-cache_lock:unlock()
